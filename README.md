@@ -13,10 +13,11 @@
 **Arboris** 就是在这种时候出现的——它不会替你写作（那样多没意思），但它会在你需要的时候，帮你理清思路、记住细节、提供几个「要不试试这个方向」的建议。
 
 **在线体验：** [https://arboris.aozhiai.com](https://arboris.aozhiai.com) 
- 
-**有问题想聊？加群：**  
+
+
+**有问题想聊？加群(微信满了...)：**  
 <p align="center">
-  <img width="294" alt="交流群二维码" src="https://github.com/user-attachments/assets/90b6819f-896b-4ddf-9946-43d52c8f1c36" />
+  <img width="294" alt="交流群二维码" src="https://github.com/user-attachments/assets/6d4fe420-f8ae-4fe4-883d-235eb576c83b" />
 </p>
 
 ---
