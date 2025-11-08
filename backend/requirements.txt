@@ -18,4 +18,4 @@ cryptography>=41.0.0
 libsql-client==0.3.1
 ollama==0.6.0
 langchain-text-splitters==0.3.11
-
+greenlet==3.2.4
