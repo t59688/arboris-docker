@@ -41,6 +41,7 @@ class UpdateLogUpdate(UpdateLogBase):
 class AdminNovelSummary(BaseModel):
     id: str
     title: str
+    project_type: str = "novel"
     owner_id: int
     owner_username: str
     genre: str

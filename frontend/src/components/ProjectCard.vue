@@ -48,6 +48,12 @@
               class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
           {{ project.genre }}
         </span>
+        <span
+          v-if="project.project_type"
+          class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700"
+        >
+          {{ project.project_type === 'poem' ? '古诗词' : '小说' }}
+        </span>
         <span v-if="chapterCount > 0"
               class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
           {{ chapterCount }} 章节
@@ -59,7 +65,7 @@
     </div>
 
     <!-- 操作按钮区域 -->
-    <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0">
+    <div class="flex gap-2">
       <button
         @click.stop="$emit('detail', project.id)"
         class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium py-2 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center gap-1"

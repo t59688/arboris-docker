@@ -36,6 +36,7 @@ class NovelProject(Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     initial_prompt: Mapped[Optional[str]] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(32), default="draft")
+    project_type: Mapped[str] = mapped_column(String(32), nullable=False, default="novel", server_default="novel")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

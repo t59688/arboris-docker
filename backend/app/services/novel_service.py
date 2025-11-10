@@ -108,12 +108,19 @@ class NovelService:
     # ------------------------------------------------------------------
     # 项目与摘要
     # ------------------------------------------------------------------
-    async def create_project(self, user_id: int, title: str, initial_prompt: str) -> NovelProject:
+    async def create_project(
+        self,
+        user_id: int,
+        title: str,
+        initial_prompt: str,
+        project_type: str = "novel",
+    ) -> NovelProject:
         project = NovelProject(
             id=str(uuid.uuid4()),
             user_id=user_id,
             title=title,
             initial_prompt=initial_prompt,
+            project_type=project_type,
         )
         blueprint = NovelBlueprint(project=project)
         self.session.add_all([project, blueprint])
@@ -121,16 +128,28 @@ class NovelService:
         await self.session.refresh(project)
         return project
 
-    async def ensure_project_owner(self, project_id: str, user_id: int) -> NovelProject:
+    async def ensure_project_owner(
+        self,
+        project_id: str,
+        user_id: int,
+        project_type: str | None = None,
+    ) -> NovelProject:
         project = await self.repo.get_by_id(project_id)
         if not project:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="项目不存在")
         if project.user_id != user_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权访问该项目")
+        if project_type and project.project_type != project_type:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="项目类型不匹配")
         return project
 
-    async def get_project_schema(self, project_id: str, user_id: int) -> NovelProjectSchema:
-        project = await self.ensure_project_owner(project_id, user_id)
+    async def get_project_schema(
+        self,
+        project_id: str,
+        user_id: int,
+        project_type: str | None = None,
+    ) -> NovelProjectSchema:
+        project = await self.ensure_project_owner(project_id, user_id, project_type=project_type)
         return await self._serialize_project(project)
 
     async def get_section_data(
@@ -138,8 +157,9 @@ class NovelService:
         project_id: str,
         user_id: int,
         section: NovelSectionType,
+        project_type: str | None = None,
     ) -> NovelSectionResponse:
-        project = await self.ensure_project_owner(project_id, user_id)
+        project = await self.ensure_project_owner(project_id, user_id, project_type=project_type)
         return self._build_section_response(project, section)
 
     async def get_chapter_schema(
@@ -147,12 +167,17 @@ class NovelService:
         project_id: str,
         user_id: int,
         chapter_number: int,
+        project_type: str | None = None,
     ) -> ChapterSchema:
-        project = await self.ensure_project_owner(project_id, user_id)
+        project = await self.ensure_project_owner(project_id, user_id, project_type=project_type)
         return self._build_chapter_schema(project, chapter_number)
 
-    async def list_projects_for_user(self, user_id: int) -> List[NovelProjectSummary]:
-        projects = await self.repo.list_by_user(user_id)
+    async def list_projects_for_user(
+        self,
+        user_id: int,
+        project_type: str | None = None,
+    ) -> List[NovelProjectSummary]:
+        projects = await self.repo.list_by_user(user_id, project_type=project_type)
         summaries: List[NovelProjectSummary] = []
         for project in projects:
             blueprint = project.blueprint
@@ -165,6 +190,7 @@ class NovelService:
                 NovelProjectSummary(
                     id=project.id,
                     title=project.title,
+                    project_type=project.project_type,
                     genre=genre,
                     last_edited=project.updated_at.isoformat() if project.updated_at else "未知",
                     completed_chapters=completed,
@@ -173,8 +199,8 @@ class NovelService:
             )
         return summaries
 
-    async def list_projects_for_admin(self) -> List[AdminNovelSummary]:
-        projects = await self.repo.list_all()
+    async def list_projects_for_admin(self, project_type: str | None = None) -> List[AdminNovelSummary]:
+        projects = await self.repo.list_all(project_type=project_type)
         summaries: List[AdminNovelSummary] = []
         for project in projects:
             blueprint = project.blueprint
@@ -188,6 +214,7 @@ class NovelService:
                 AdminNovelSummary(
                     id=project.id,
                     title=project.title,
+                    project_type=project.project_type,
                     owner_id=owner.id if owner else 0,
                     owner_username=owner.username if owner else "未知",
                     genre=genre,
@@ -198,9 +225,14 @@ class NovelService:
             )
         return summaries
 
-    async def delete_projects(self, project_ids: List[str], user_id: int) -> None:
+    async def delete_projects(
+        self,
+        project_ids: List[str],
+        user_id: int,
+        project_type: str | None = None,
+    ) -> None:
         for pid in project_ids:
-            project = await self.ensure_project_owner(pid, user_id)
+            project = await self.ensure_project_owner(pid, user_id, project_type=project_type)
             await self.repo.delete(project)
         await self.session.commit()
 
@@ -515,6 +547,7 @@ class NovelService:
             user_id=project.user_id,
             title=project.title,
             initial_prompt=project.initial_prompt or "",
+            project_type=project.project_type,
             conversation_history=conversations,
             blueprint=blueprint_schema,
             chapters=chapters_schema,

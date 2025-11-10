@@ -85,15 +85,13 @@ export const useNovelStore = defineStore('novel', () => {
     }
   }
 
-  async function sendConversation(userInput: any): Promise<ConverseResponse> {
+  async function sendConversation(userInput: any, projectId?: string): Promise<ConverseResponse> {
     isLoading.value = true
     error.value = null
     try {
-      if (!currentProject.value) {
-        throw new Error('没有当前项目')
-      }
+      const targetProjectId = await ensureProjectId(projectId)
       const response = await NovelAPI.converseConcept(
-        currentProject.value.id,
+        targetProjectId,
         userInput,
         currentConversationState.value
       )
@@ -107,15 +105,13 @@ export const useNovelStore = defineStore('novel', () => {
     }
   }
 
-  async function generateBlueprint(): Promise<BlueprintGenerationResponse> {
+  async function generateBlueprint(projectId?: string): Promise<BlueprintGenerationResponse> {
     // Generate blueprint from conversation history
     isLoading.value = true
     error.value = null
     try {
-      if (!currentProject.value) {
-        throw new Error('没有当前项目')
-      }
-      return await NovelAPI.generateBlueprint(currentProject.value.id)
+      const targetProjectId = await ensureProjectId(projectId)
+      return await NovelAPI.generateBlueprint(targetProjectId)
     } catch (err) {
       error.value = err instanceof Error ? err.message : '生成蓝图失败'
       throw err
@@ -124,23 +120,34 @@ export const useNovelStore = defineStore('novel', () => {
     }
   }
 
-  async function saveBlueprint(blueprint: Blueprint) {
+  async function saveBlueprint(blueprint: Blueprint, projectId?: string) {
     isLoading.value = true
     error.value = null
     try {
-      if (!currentProject.value) {
-        throw new Error('没有当前项目')
-      }
+      const targetProjectId = await ensureProjectId(projectId)
       if (!blueprint) {
         throw new Error('缺少蓝图数据')
       }
-      currentProject.value = await NovelAPI.saveBlueprint(currentProject.value.id, blueprint)
+      currentProject.value = await NovelAPI.saveBlueprint(targetProjectId, blueprint)
     } catch (err) {
       error.value = err instanceof Error ? err.message : '保存蓝图失败'
       throw err
     } finally {
       isLoading.value = false
     }
+  }
+
+  async function ensureProjectId(fallbackId?: string): Promise<string> {
+    if (currentProject.value?.id) {
+      return currentProject.value.id
+    }
+    if (fallbackId) {
+      await loadProject(fallbackId, true)
+      if (currentProject.value?.id) {
+        return currentProject.value.id
+      }
+    }
+    throw new Error('没有当前项目')
   }
 
   async function generateChapter(chapterNumber: number): Promise<NovelProject> {

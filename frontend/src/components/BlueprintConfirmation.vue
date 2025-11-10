@@ -128,6 +128,7 @@
 import { ref, computed, onUnmounted, inject } from 'vue'
 import { marked } from 'marked'
 import { useNovelStore } from '@/stores/novel'
+import { usePoemStore } from '@/stores/poem'
 import { globalAlert } from '@/composables/useAlert'
 
 // 配置 marked
@@ -136,11 +137,16 @@ marked.setOptions({
   breaks: true         // 将单个换行视为 <br>
 })
 
+type CreativeType = 'novel' | 'poem'
+
 interface Props {
   aiMessage: string
+  creativeType?: CreativeType
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  creativeType: 'novel'
+})
 
 const emit = defineEmits<{
   blueprintGenerated: [response: any]
@@ -148,6 +154,8 @@ const emit = defineEmits<{
 }>()
 
 const novelStore = useNovelStore()
+const poemStore = usePoemStore()
+const activeStore = computed(() => props.creativeType === 'poem' ? poemStore : novelStore)
 const isGenerating = ref(false)
 const progress = ref(0)
 const timeElapsed = ref(0)
@@ -215,8 +223,8 @@ const generateBlueprint = async () => {
 
   try {
     // 直接调用store中的API
-    console.log('开始调用generateBlueprint API...')
-    const response = await novelStore.generateBlueprint()
+    console.log('开始调用generateBlueprint API...', `创作类型: ${props.creativeType}`)
+    const response = await activeStore.value.generateBlueprint()
     console.log('API调用成功，收到响应:', response)
 
     // API成功后，快速完成进度条到100%

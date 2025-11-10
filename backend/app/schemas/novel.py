@@ -86,6 +86,7 @@ class NovelProject(BaseModel):
     user_id: int
     title: str
     initial_prompt: str
+    project_type: str = "novel"
     conversation_history: List[Dict[str, Any]] = []
     blueprint: Optional[Blueprint] = None
     chapters: List[Chapter] = []
@@ -97,6 +98,7 @@ class NovelProject(BaseModel):
 class NovelProjectSummary(BaseModel):
     id: str
     title: str
+    project_type: str = "novel"
     genre: str
     last_edited: str
     completed_chapters: int

@@ -60,7 +60,7 @@ async def generate_chapter(
     prompt_service = PromptService(session)
     llm_service = LLMService(session)
 
-    project = await novel_service.ensure_project_owner(project_id, current_user.id)
+    project = await novel_service.ensure_project_owner(project_id, current_user.id, project_type="novel")
     logger.info("用户 %s 开始为项目 %s 生成第 %s 章", current_user.id, project_id, request.chapter_number)
     outline = await novel_service.get_outline(project_id, request.chapter_number)
     if not outline:
@@ -297,7 +297,7 @@ async def select_chapter_version(
     novel_service = NovelService(session)
     llm_service = LLMService(session)
 
-    project = await novel_service.ensure_project_owner(project_id, current_user.id)
+    project = await novel_service.ensure_project_owner(project_id, current_user.id, project_type="novel")
     chapter = next((ch for ch in project.chapters if ch.chapter_number == request.chapter_number), None)
     if not chapter:
         logger.warning("项目 %s 未找到第 %s 章，无法选择版本", project_id, request.chapter_number)
@@ -364,7 +364,7 @@ async def evaluate_chapter(
     prompt_service = PromptService(session)
     llm_service = LLMService(session)
 
-    project = await novel_service.ensure_project_owner(project_id, current_user.id)
+    project = await novel_service.ensure_project_owner(project_id, current_user.id, project_type="novel")
     chapter = next((ch for ch in project.chapters if ch.chapter_number == request.chapter_number), None)
     if not chapter:
         logger.warning("项目 %s 未找到第 %s 章，无法执行评估", project_id, request.chapter_number)
@@ -419,7 +419,7 @@ async def generate_chapter_outline(
     prompt_service = PromptService(session)
     llm_service = LLMService(session)
 
-    await novel_service.ensure_project_owner(project_id, current_user.id)
+    await novel_service.ensure_project_owner(project_id, current_user.id, project_type="novel")
     logger.info(
         "用户 %s 请求生成项目 %s 的章节大纲，起始章节 %s，数量 %s",
         current_user.id,
@@ -502,7 +502,7 @@ async def update_chapter_outline(
     current_user: UserInDB = Depends(get_current_user),
 ) -> NovelProjectSchema:
     novel_service = NovelService(session)
-    await novel_service.ensure_project_owner(project_id, current_user.id)
+    await novel_service.ensure_project_owner(project_id, current_user.id, project_type="novel")
     logger.info(
         "用户 %s 更新项目 %s 第 %s 章大纲",
         current_user.id,
@@ -546,7 +546,7 @@ async def delete_chapters(
         raise HTTPException(status_code=400, detail="请提供要删除的章节号列表")
     novel_service = NovelService(session)
     llm_service = LLMService(session)
-    await novel_service.ensure_project_owner(project_id, current_user.id)
+    await novel_service.ensure_project_owner(project_id, current_user.id, project_type="novel")
     logger.info(
         "用户 %s 删除项目 %s 的章节 %s",
         current_user.id,
@@ -588,7 +588,7 @@ async def edit_chapter(
     novel_service = NovelService(session)
     llm_service = LLMService(session)
 
-    project = await novel_service.ensure_project_owner(project_id, current_user.id)
+    project = await novel_service.ensure_project_owner(project_id, current_user.id, project_type="novel")
     chapter = next((ch for ch in project.chapters if ch.chapter_number == request.chapter_number), None)
     if not chapter or chapter.selected_version is None:
         logger.warning("项目 %s 第 %s 章尚未生成或未选择版本，无法编辑", project_id, request.chapter_number)

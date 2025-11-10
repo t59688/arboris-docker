@@ -7,7 +7,7 @@ export const API_BASE_URL = import.meta.env.MODE === 'production' ? '' : 'http:/
 export const API_PREFIX = '/api'
 
 // 统一的请求处理函数
-const request = async (url: string, options: RequestInit = {}) => {
+export const request = async (url: string, options: RequestInit = {}) => {
   const authStore = useAuthStore()
   const headers = new Headers({
     'Content-Type': 'application/json',
@@ -36,10 +36,13 @@ const request = async (url: string, options: RequestInit = {}) => {
 }
 
 // 类型定义
+export type CreativeType = 'novel' | 'poem' | string
+
 export interface NovelProject {
   id: string
   title: string
   initial_prompt: string
+  project_type: CreativeType
   blueprint?: Blueprint
   chapters: Chapter[]
   conversation_history: ConversationMessage[]
@@ -48,6 +51,7 @@ export interface NovelProject {
 export interface NovelProjectSummary {
   id: string
   title: string
+  project_type: CreativeType
   genre: string
   last_edited: string
   completed_chapters: number

@@ -62,7 +62,7 @@ async def create_novel(
 ) -> NovelProjectSchema:
     """为当前用户创建一个新的小说项目。"""
     novel_service = NovelService(session)
-    project = await novel_service.create_project(current_user.id, title, initial_prompt)
+    project = await novel_service.create_project(current_user.id, title, initial_prompt, project_type="novel")
     logger.info("用户 %s 创建项目 %s", current_user.id, project.id)
     return await novel_service.get_project_schema(project.id, current_user.id)
 
@@ -74,7 +74,7 @@ async def list_novels(
 ) -> List[NovelProjectSummary]:
     """列出用户的全部小说项目摘要信息。"""
     novel_service = NovelService(session)
-    projects = await novel_service.list_projects_for_user(current_user.id)
+    projects = await novel_service.list_projects_for_user(current_user.id, project_type="novel")
     logger.info("用户 %s 获取项目列表，共 %s 个", current_user.id, len(projects))
     return projects
 
@@ -87,7 +87,7 @@ async def get_novel(
 ) -> NovelProjectSchema:
     novel_service = NovelService(session)
     logger.info("用户 %s 查询项目 %s", current_user.id, project_id)
-    return await novel_service.get_project_schema(project_id, current_user.id)
+    return await novel_service.get_project_schema(project_id, current_user.id, project_type="novel")
 
 
 @router.get("/{project_id}/sections/{section}", response_model=NovelSectionResponse)
@@ -99,7 +99,7 @@ async def get_novel_section(
 ) -> NovelSectionResponse:
     novel_service = NovelService(session)
     logger.info("用户 %s 获取项目 %s 的 %s 区段", current_user.id, project_id, section)
-    return await novel_service.get_section_data(project_id, current_user.id, section)
+    return await novel_service.get_section_data(project_id, current_user.id, section, project_type="novel")
 
 
 @router.get("/{project_id}/chapters/{chapter_number}", response_model=ChapterSchema)
@@ -111,7 +111,7 @@ async def get_chapter(
 ) -> ChapterSchema:
     novel_service = NovelService(session)
     logger.info("用户 %s 获取项目 %s 第 %s 章", current_user.id, project_id, chapter_number)
-    return await novel_service.get_chapter_schema(project_id, current_user.id, chapter_number)
+    return await novel_service.get_chapter_schema(project_id, current_user.id, chapter_number, project_type="novel")
 
 
 @router.delete("", status_code=status.HTTP_200_OK)
@@ -121,7 +121,7 @@ async def delete_novels(
     current_user: UserInDB = Depends(get_current_user),
 ) -> Dict[str, str]:
     novel_service = NovelService(session)
-    await novel_service.delete_projects(project_ids, current_user.id)
+    await novel_service.delete_projects(project_ids, current_user.id, project_type="novel")
     logger.info("用户 %s 删除项目 %s", current_user.id, project_ids)
     return {"status": "success", "message": f"成功删除 {len(project_ids)} 个项目"}
 
@@ -138,7 +138,7 @@ async def converse_with_concept(
     prompt_service = PromptService(session)
     llm_service = LLMService(session)
 
-    project = await novel_service.ensure_project_owner(project_id, current_user.id)
+    project = await novel_service.ensure_project_owner(project_id, current_user.id, project_type="novel")
 
     history_records = await novel_service.list_conversations(project_id)
     logger.info(
@@ -208,7 +208,7 @@ async def generate_blueprint(
     prompt_service = PromptService(session)
     llm_service = LLMService(session)
 
-    project = await novel_service.ensure_project_owner(project_id, current_user.id)
+    project = await novel_service.ensure_project_owner(project_id, current_user.id, project_type="novel")
     logger.info("项目 %s 开始生成蓝图", project_id)
 
     history_records = await novel_service.list_conversations(project_id)
@@ -294,7 +294,7 @@ async def save_blueprint(
 ) -> NovelProjectSchema:
     """保存蓝图信息，可用于手动覆盖自动生成结果。"""
     novel_service = NovelService(session)
-    project = await novel_service.ensure_project_owner(project_id, current_user.id)
+    project = await novel_service.ensure_project_owner(project_id, current_user.id, project_type="novel")
 
     if blueprint_data:
         await novel_service.replace_blueprint(project_id, blueprint_data)
@@ -318,7 +318,7 @@ async def patch_blueprint(
 ) -> NovelProjectSchema:
     """局部更新蓝图字段，对世界观或角色做微调。"""
     novel_service = NovelService(session)
-    project = await novel_service.ensure_project_owner(project_id, current_user.id)
+    project = await novel_service.ensure_project_owner(project_id, current_user.id, project_type="novel")
 
     update_data = payload.model_dump(exclude_unset=True)
     await novel_service.patch_blueprint(project_id, update_data)

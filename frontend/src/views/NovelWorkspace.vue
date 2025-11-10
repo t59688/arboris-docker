@@ -33,13 +33,13 @@
         </div>
 
         <!-- 加载状态 -->
-        <div v-if="novelStore.isLoading" class="flex justify-center items-center py-8">
+        <div v-if="isLoadingOverall" class="flex justify-center items-center py-8">
           <div class="loader"></div>
         </div>
 
         <!-- 错误状态 -->
-        <div v-else-if="novelStore.error" class="text-red-500 text-center py-8">
-          {{ novelStore.error }}
+        <div v-else-if="errorMessage" class="text-red-500 text-center py-8">
+          {{ errorMessage }}
           <button
             @click="loadProjects"
             class="block mt-4 mx-auto px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-all duration-300 transform hover:scale-105"
@@ -51,7 +51,7 @@
         <!-- 项目列表 -->
         <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <!-- 空状态 -->
-          <div v-if="novelStore.projects.length === 0" class="col-span-full text-center py-8">
+          <div v-if="allProjects.length === 0" class="col-span-full text-center py-8">
             <p class="text-gray-500 mb-4">还没有项目，快去开启灵感模式创建一个吧！</p>
             <button
               @click="goToInspiration"
@@ -63,7 +63,7 @@
 
           <!-- 项目卡片 -->
           <ProjectCard
-            v-for="project in novelStore.projects"
+            v-for="project in allProjects"
             :key="project.id"
             :project="project"
             @click="enterProject(project)"
@@ -141,15 +141,18 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNovelStore } from '@/stores/novel'
+import { usePoemStore } from '@/stores/poem'
 import { useAuthStore } from '@/stores/auth'
+import { globalAlert } from '@/composables/useAlert'
 import ProjectCard from '@/components/ProjectCard.vue'
-import type { NovelProject, NovelProjectSummary } from '@/api/novel'
+import type { NovelProjectSummary } from '@/api/novel'
 
 const router = useRouter()
 const novelStore = useNovelStore()
+const poemStore = usePoemStore()
 const authStore = useAuthStore()
 
 // 删除相关状态
@@ -157,6 +160,17 @@ const showDeleteDialog = ref(false)
 const projectToDelete = ref<NovelProjectSummary | null>(null)
 const isDeleting = ref(false)
 const deleteMessage = ref<{type: 'success' | 'error', text: string} | null>(null)
+const allProjects = computed(() => {
+  const merged = [...novelStore.projects, ...poemStore.projects]
+  return merged.sort((a, b) => {
+    const da = new Date(a.last_edited).getTime()
+    const db = new Date(b.last_edited).getTime()
+    return db - da
+  })
+})
+
+const isLoadingOverall = computed(() => novelStore.isLoading || poemStore.isLoading)
+const errorMessage = computed(() => novelStore.error || poemStore.error)
 
 const goBack = () => {
   router.push('/')
@@ -167,28 +181,43 @@ const goToInspiration = () => {
 }
 
 const viewProjectDetail = (projectId: string) => {
+  const project = allProjects.value.find(p => p.id === projectId)
+  if (project?.project_type === 'poem') {
+    // 跳转到诗词详情页
+    router.push(`/poem/${projectId}`)
+    return
+  }
   router.push(`/detail/${projectId}`)
 }
 
 const enterProject = (project: NovelProjectSummary) => {
-  if (project.title === '未命名灵感') {
-    router.push(`/inspiration?project_id=${project.id}`)
-  } else {
-    router.push(`/novel/${project.id}`)
+  const projectType = project.project_type || 'novel'
+  const shouldUseInspiration =
+    projectType === 'poem' ||
+    project.title === '未命名灵感'
+
+  if (shouldUseInspiration) {
+    router.push(`/inspiration?project_id=${project.id}&type=${projectType}`)
+    return
   }
+
+  router.push(`/novel/${project.id}`)
 }
 
 const loadProjects = async () => {
-  await novelStore.loadProjects()
+  await Promise.all([
+    novelStore.loadProjects(),
+    poemStore.loadProjects()
+  ])
 }
 
 // 删除相关方法
 const handleDeleteProject = (projectId: string) => {
-  const project = novelStore.projects.find(p => p.id === projectId)
-  if (project) {
-    projectToDelete.value = project
-    showDeleteDialog.value = true
-  }
+  const project = allProjects.value.find(p => p.id === projectId)
+  if (!project) return
+
+  projectToDelete.value = project
+  showDeleteDialog.value = true
 }
 
 const cancelDelete = () => {
@@ -201,7 +230,8 @@ const confirmDelete = async () => {
   
   isDeleting.value = true
   try {
-    await novelStore.deleteProjects([projectToDelete.value.id])
+    const targetStore = projectToDelete.value.project_type === 'poem' ? poemStore : novelStore
+    await targetStore.deleteProjects([projectToDelete.value.id])
     deleteMessage.value = { type: 'success', text: `项目 "${projectToDelete.value.title}" 已成功删除` }
     showDeleteDialog.value = false
     projectToDelete.value = null

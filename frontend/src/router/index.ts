@@ -4,6 +4,7 @@ import NovelWorkspace from '../views/NovelWorkspace.vue'
 import InspirationMode from '../views/InspirationMode.vue'
 import WritingDesk from '../views/WritingDesk.vue'
 import NovelDetail from '../views/NovelDetail.vue'
+import PoemDetail from '../views/PoemDetail.vue'
 import Login from '../views/Login.vue'
 import Register from '../views/Register.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -33,6 +34,13 @@ const router = createRouter({
       path: '/detail/:id',
       name: 'novel-detail',
       component: NovelDetail,
+      props: true,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/poem/:id',
+      name: 'poem-detail',
+      component: PoemDetail,
       props: true,
       meta: { requiresAuth: true },
     },

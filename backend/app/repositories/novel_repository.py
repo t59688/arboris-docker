@@ -28,8 +28,8 @@ class NovelRepository(BaseRepository[NovelProject]):
         result = await self.session.execute(stmt)
         return result.scalars().first()
 
-    async def list_by_user(self, user_id: int) -> Iterable[NovelProject]:
-        result = await self.session.execute(
+    async def list_by_user(self, user_id: int, project_type: str | None = None) -> Iterable[NovelProject]:
+        stmt = (
             select(NovelProject)
             .where(NovelProject.user_id == user_id)
             .order_by(NovelProject.updated_at.desc())
@@ -39,10 +39,13 @@ class NovelRepository(BaseRepository[NovelProject]):
                 selectinload(NovelProject.chapters).selectinload(Chapter.selected_version),
             )
         )
+        if project_type:
+            stmt = stmt.where(NovelProject.project_type == project_type)
+        result = await self.session.execute(stmt)
         return result.scalars().all()
 
-    async def list_all(self) -> Iterable[NovelProject]:
-        result = await self.session.execute(
+    async def list_all(self, project_type: str | None = None) -> Iterable[NovelProject]:
+        stmt = (
             select(NovelProject)
             .order_by(NovelProject.updated_at.desc())
             .options(
@@ -52,4 +55,7 @@ class NovelRepository(BaseRepository[NovelProject]):
                 selectinload(NovelProject.chapters).selectinload(Chapter.selected_version),
             )
         )
+        if project_type:
+            stmt = stmt.where(NovelProject.project_type == project_type)
+        result = await self.session.execute(stmt)
         return result.scalars().all()

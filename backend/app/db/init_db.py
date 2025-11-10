@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 
 from sqlalchemy import select, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
@@ -25,6 +25,7 @@ async def init_db() -> None:
     # ---- 第一步：创建所有表结构 ----
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await _ensure_project_type_column(conn)
     logger.info("数据库表结构已初始化")
 
     # ---- 第二步：确保管理员账号至少存在一个 ----
@@ -104,6 +105,33 @@ async def _ensure_database_exists() -> None:
     async with admin_engine.begin() as conn:
         await conn.execute(text(f"CREATE DATABASE IF NOT EXISTS `{database}`"))
     await admin_engine.dispose()
+
+
+async def _ensure_project_type_column(conn) -> None:
+    """确保 novel_projects 表拥有 project_type 列，兼容旧版本数据库。"""
+    dialect = conn.engine.dialect.name
+    alter_sql = ""
+    if dialect == "sqlite":
+        alter_sql = "ALTER TABLE novel_projects ADD COLUMN project_type VARCHAR(32) NOT NULL DEFAULT 'novel'"
+    elif dialect in {"mysql", "mariadb"}:
+        alter_sql = (
+            "ALTER TABLE novel_projects "
+            "ADD COLUMN IF NOT EXISTS project_type VARCHAR(32) NOT NULL DEFAULT 'novel'"
+        )
+    else:
+        alter_sql = (
+            "ALTER TABLE novel_projects "
+            "ADD COLUMN project_type VARCHAR(32) NOT NULL DEFAULT 'novel'"
+        )
+
+    try:
+        await conn.execute(text(alter_sql))
+        logger.info("已为 novel_projects 添加 project_type 列")
+    except SQLAlchemyError as exc:
+        message = str(exc).lower()
+        if "duplicate column" in message or "exists" in message or "already exists" in message:
+            return
+        logger.debug("添加 project_type 列时忽略的异常: %s", exc)
 
 
 async def _ensure_default_prompts(session: AsyncSession) -> None:

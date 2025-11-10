@@ -1,5 +1,39 @@
 <template>
-  <div class="flex items-center justify-center min-h-screen p-4">
+  <div class="flex items-center justify-center min-h-screen p-4 relative">
+    <!-- 创作类型选择弹窗 -->
+    <div
+      v-if="showTypeSelector"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm px-4"
+    >
+      <div class="w-full max-w-lg bg-white rounded-2xl shadow-2xl p-8">
+        <h3 class="text-2xl font-bold text-gray-800 text-center mb-6">选择创作模式</h3>
+        <p class="text-gray-500 text-center mb-8">现在可以在「小说灵感」与「古诗词创作」之间切换</p>
+        <div class="grid gap-4">
+          <button
+            @click="selectCreativeType('novel')"
+            class="w-full border border-indigo-200 rounded-xl p-4 text-left hover:border-indigo-400 hover:bg-indigo-50 transition-all"
+          >
+            <p class="text-sm text-indigo-500 font-semibold">小说灵感</p>
+            <p class="text-lg font-bold text-gray-900">与“文思”构建故事蓝图</p>
+            <p class="text-sm text-gray-500 mt-1">角色、世界观、大纲一步步完善</p>
+          </button>
+          <button
+            @click="selectCreativeType('poem')"
+            class="w-full border border-emerald-200 rounded-xl p-4 text-left hover:border-emerald-400 hover:bg-emerald-50 transition-all"
+          >
+            <p class="text-sm text-emerald-500 font-semibold">古诗词创作</p>
+            <p class="text-lg font-bold text-gray-900">与“清商”打磨诗意与章法</p>
+            <p class="text-sm text-gray-500 mt-1">确定题旨、意象、格律与整体气韵</p>
+          </button>
+        </div>
+        <button
+          @click="showTypeSelector = false"
+          class="mt-6 w-full text-gray-500 hover:text-gray-700 text-sm"
+        >
+          先等等
+        </button>
+      </div>
+    </div>
     <div class="w-full max-w-6xl mx-auto">
       <!-- 灵感模式入口界面 -->
       <div v-if="!conversationStarted" class="text-center p-8 bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg fade-in">
@@ -8,11 +42,11 @@
           准备好释放你的创造力了吗？让AI引导你，一步步构建出独一无二的故事世界。
         </p>
         <button
-          @click="startConversation"
-          :disabled="novelStore.isLoading"
+          @click="openTypeSelector"
+          :disabled="activeStoreIsLoading"
           class="bg-indigo-500 text-white font-bold py-3 px-8 rounded-full hover:bg-indigo-600 transition-all duration-300 transform hover:scale-105 shadow-lg focus:outline-none focus:ring-4 focus:ring-indigo-300 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {{ novelStore.isLoading ? '正在准备...' : '开启灵感模式' }}
+          {{ activeStoreIsLoading ? '正在准备...' : '开启灵感模式' }}
         </button>
         <button
           @click="goBack"
@@ -30,12 +64,15 @@
         <!-- 头部 -->
         <div class="p-4 border-b border-gray-200">
           <div class="flex justify-between items-center">
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-3">
               <span class="relative flex h-3 w-3">
                 <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
                 <span class="relative inline-flex rounded-full h-3 w-3 bg-indigo-500"></span>
               </span>
-              <span class="text-sm font-medium text-indigo-600">与“文思”对话中...</span>
+              <span class="text-sm font-medium text-indigo-600">{{ assistantLabel }}</span>
+              <span class="px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-600">
+                {{ creativeType === 'poem' ? '古诗词创作' : '小说灵感' }}
+              </span>
             </div>
             <div class="flex items-center gap-4">
               <span v-if="currentTurn > 0" class="text-sm font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-md">
@@ -87,7 +124,7 @@
         <div class="p-4 border-t border-gray-200 bg-gray-50">
           <ConversationInput
             :ui-control="currentUIControl"
-            :loading="novelStore.isLoading"
+            :loading="activeStoreIsLoading"
             @submit="handleUserInput"
           />
         </div>
@@ -97,13 +134,21 @@
       <BlueprintConfirmation
         v-if="showBlueprintConfirmation"
         :ai-message="confirmationMessage"
+        :creative-type="creativeType"
         @blueprint-generated="handleBlueprintGenerated"
         @back="backToConversation"
       />
 
       <!-- 大纲展示界面 -->
       <BlueprintDisplay
-        v-if="showBlueprint"
+        v-if="showBlueprint && creativeType === 'novel'"
+        :blueprint="completedBlueprint"
+        :ai-message="blueprintMessage"
+        @confirm="handleConfirmBlueprint"
+        @regenerate="handleRegenerateBlueprint"
+      />
+      <PoemBlueprintDisplay
+        v-if="showBlueprint && creativeType === 'poem'"
         :blueprint="completedBlueprint"
         :ai-message="blueprintMessage"
         @confirm="handleConfirmBlueprint"
@@ -114,14 +159,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, onMounted } from 'vue'
+import { ref, nextTick, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useNovelStore } from '@/stores/novel'
+import { usePoemStore } from '@/stores/poem'
 import type { UIControl, Blueprint } from '@/api/novel'
 import ChatBubble from '@/components/ChatBubble.vue'
 import ConversationInput from '@/components/ConversationInput.vue'
 import BlueprintConfirmation from '@/components/BlueprintConfirmation.vue'
 import BlueprintDisplay from '@/components/BlueprintDisplay.vue'
+import PoemBlueprintDisplay from '@/components/PoemBlueprintDisplay.vue'
 import InspirationLoading from '@/components/InspirationLoading.vue'
 import { globalAlert } from '@/composables/useAlert'
 
@@ -130,9 +177,19 @@ interface ChatMessage {
   type: 'user' | 'ai'
 }
 
+type CreativeType = 'novel' | 'poem'
+
 const router = useRouter()
 const route = useRoute()
 const novelStore = useNovelStore()
+const poemStore = usePoemStore()
+const creativeType = ref<CreativeType>('novel')
+const showTypeSelector = ref(false)
+const currentProjectId = ref<string | null>(null)
+const activeStore = computed(() => (creativeType.value === 'novel' ? novelStore : poemStore))
+const activeStoreIsLoading = computed(() => activeStore.value.isLoading)
+const getStoreByType = (type: CreativeType) => (type === 'novel' ? novelStore : poemStore)
+const assistantLabel = computed(() => (creativeType.value === 'poem' ? '与“清商”对话中...' : '与“文思”对话中...'))
 
 const conversationStarted = ref(false)
 const isInitialLoading = ref(false)
@@ -146,8 +203,41 @@ const confirmationMessage = ref('')
 const blueprintMessage = ref('')
 const chatArea = ref<HTMLElement>()
 
+const openTypeSelector = () => {
+  showTypeSelector.value = true
+}
+
+const selectCreativeType = async (type: CreativeType) => {
+  creativeType.value = type
+  showTypeSelector.value = false
+  await startConversation(type)
+}
+
 const goBack = () => {
   router.push('/')
+}
+
+const clearStoreState = () => {
+  novelStore.setCurrentProject(null)
+  novelStore.currentConversationState = {}
+  poemStore.setCurrentProject(null)
+  poemStore.currentConversationState = {}
+  currentProjectId.value = null
+}
+
+const ensureProjectLoaded = async () => {
+  const store = activeStore.value
+  const projectId = getActiveProjectId()
+  if (!store.currentProject && projectId) {
+    try {
+      await store.loadProject(projectId, true)
+      if (store.currentProject?.id) {
+        currentProjectId.value = store.currentProject.id
+      }
+    } catch (error) {
+      console.error('无法重新加载项目', error)
+    }
+  }
 }
 
 // 清空所有状态，开始新的灵感对话
@@ -162,10 +252,8 @@ const resetInspirationMode = () => {
   completedBlueprint.value = null
   confirmationMessage.value = ''
   blueprintMessage.value = ''
-  
-  // 清空 store 中的当前项目和对话状态
-  novelStore.setCurrentProject(null)
-  novelStore.currentConversationState = {}
+  clearStoreState()
+  router.replace({ query: {} })
 }
 
 const exitConversation = async () => {
@@ -179,7 +267,7 @@ const exitConversation = async () => {
 const handleRestart = async () => {
   const confirmed = await globalAlert.showConfirm('确定要重新开始吗？当前对话内容将会丢失。', '重新开始确认')
   if (confirmed) {
-    await startConversation()
+    await startConversation(creativeType.value)
   }
 }
 
@@ -187,14 +275,28 @@ const backToConversation = () => {
   showBlueprintConfirmation.value = false
 }
 
-const startConversation = async () => {
+const startConversation = async (type: CreativeType = creativeType.value) => {
   // 重置所有状态，开始全新的对话
+  creativeType.value = type
+  showTypeSelector.value = false
   resetInspirationMode()
   conversationStarted.value = true
   isInitialLoading.value = true
+  const store = getStoreByType(type)
+  const defaultTitle = type === 'poem' ? '未命名诗作' : '未命名灵感'
+  const defaultPrompt = type === 'poem' ? '开始古诗词灵感模式' : '开始灵感模式'
   
   try {
-    await novelStore.createProject('未命名灵感', '开始灵感模式')
+    await store.createProject(defaultTitle, defaultPrompt)
+    currentProjectId.value = store.currentProject?.id ?? null
+    if (currentProjectId.value) {
+      router.replace({
+        query: {
+          type,
+          project_id: currentProjectId.value,
+        }
+      })
+    }
     
     // 发起第一次对话
     await handleUserInput(null)
@@ -205,11 +307,25 @@ const startConversation = async () => {
   }
 }
 
-const restoreConversation = async (projectId: string) => {
+const restoreConversation = async (projectId: string, type: CreativeType = creativeType.value) => {
   try {
-    await novelStore.loadProject(projectId)
-    const project = novelStore.currentProject
+    creativeType.value = type
+    const store = getStoreByType(type)
+    await store.loadProject(projectId)
+    const project = store.currentProject
     if (project && project.conversation_history) {
+      // 🔍 检查：如果蓝图已经保存，直接跳转到相应页面，不再进入灵感模式
+      if (project.blueprint && Object.keys(project.blueprint).length > 0) {
+        if (type === 'novel') {
+          router.push(`/novel/${project.id}`)
+        } else {
+          // 诗词蓝图已保存，跳转到诗词详情页
+          router.push(`/poem/${project.id}`)
+        }
+        return
+      }
+
+      currentProjectId.value = project.id
       conversationStarted.value = true
       chatMessages.value = project.conversation_history.map((item): ChatMessage | null => {
         if (item.role === 'user') {
@@ -264,7 +380,7 @@ const handleUserInput = async (userInput: any) => {
       await scrollToBottom()
     }
 
-    const response = await novelStore.sendConversation(userInput)
+    const response = await activeStore.value.sendConversation(userInput, getActiveProjectId() || undefined)
 
     // 首次加载完成后，关闭加载动画
     if (isInitialLoading.value) {
@@ -305,7 +421,8 @@ const handleUserInput = async (userInput: any) => {
 
 const handleGenerateBlueprint = async () => {
   try {
-    const response = await novelStore.generateBlueprint()
+    await ensureProjectLoaded()
+    const response = await activeStore.value.generateBlueprint(getActiveProjectId() || undefined)
     handleBlueprintGenerated(response)
   } catch (error) {
     console.error('生成蓝图失败:', error)
@@ -332,10 +449,15 @@ const handleConfirmBlueprint = async () => {
     return
   }
   try {
-    await novelStore.saveBlueprint(completedBlueprint.value)
-    // 跳转到写作工作台
-    if (novelStore.currentProject) {
-      router.push(`/novel/${novelStore.currentProject.id}`)
+    await ensureProjectLoaded()
+    await activeStore.value.saveBlueprint(completedBlueprint.value, getActiveProjectId() || undefined)
+    const project = activeStore.value.currentProject
+    if (!project) return
+    if (creativeType.value === 'novel') {
+      router.push(`/novel/${project.id}`)
+    } else {
+      // 跳转到诗词详情页
+      router.push(`/poem/${project.id}`)
     }
   } catch (error) {
     console.error('保存蓝图失败:', error)
@@ -350,12 +472,18 @@ const scrollToBottom = async () => {
   }
 }
 
+const getActiveProjectId = (): string | null => {
+  return currentProjectId.value || activeStore.value.currentProject?.id || (route.query.project_id as string | undefined) || null
+}
+
 onMounted(() => {
+  const queryType = route.query.type === 'poem' ? 'poem' : 'novel'
+  creativeType.value = queryType
   const projectId = route.query.project_id as string
   if (projectId) {
-    restoreConversation(projectId)
+    currentProjectId.value = projectId
+    restoreConversation(projectId, queryType)
   } else {
-    // 每次进入灵感模式都重置状态，确保没有缓存
     resetInspirationMode()
   }
 })
